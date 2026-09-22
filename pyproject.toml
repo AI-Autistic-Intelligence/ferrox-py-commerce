@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ferrox-py-commerce"
+version = "0.1.0"
+description = "Billing, Subscriptions, and Standardized Webhooks for Ferrox-Py."
+authors = [{ name = "AI-Autistic-Intelligence" }]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ferrox-py>=0.1.0",
+    "pydantic>=2.0",
+    "stripe>=7.0.0"
+]
