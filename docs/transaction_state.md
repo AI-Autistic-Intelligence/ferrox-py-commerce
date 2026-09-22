@@ -1,13 +1,43 @@
-# Transaction State (Idempotenza e Redis)
+# Transaction State (Idempotency and Redis)
 
-Quando si maneggiano soldi reali, l'idempotenza non è opzionale, è un requisito legale.
+## 1. Overview (What does this do?)
+The Transaction State module provides a highly concurrent, distributed State Machine designed specifically for managing the lifecycle of financial transactions. It ensures that incoming payment updates (like webhooks) are processed exactly once and in a logically sound order.
 
-## TransactionStateService
-Servizio che si appoggia a **Redis** per mantenere una Macchina a Stati (State Machine) effimera o distribuita, in modo da resistere ai problemi di concorrenza.
+## 2. Philosophy (Why does it exist?)
+When handling real money, idempotency is not just a nice-to-have architectural feature; it is a strict legal and operational requirement. The system must never credit a user twice for the same payment, even if Stripe sends the `charge.succeeded` webhook three times due to network retries. This module exists to shift the burden of idempotency off the SQL database and onto a blazing-fast in-memory layer (Redis), preventing database locks and race conditions entirely.
 
-### Come previene i problemi
-- **Check-and-Set Atomico**: Quando arriva un webhook `PaymentSuccessEvent`, il servizio cerca la transazione su Redis. Se è già in stato `COMPLETED`, ignora la richiesta (gestendo così eventuali webhook duplicati).
-- **Out of Order**: Se Stripe invia `invoice.paid` prima di `charge.succeeded` per un ritardo di rete interno a loro, la Macchina a Stati accoda o riconosce la transizione mancante, rifiutando transizioni invalide (es. `FAILED` -> `COMPLETED`).
+## 3. Target Audience (Who is it for?)
+This module is for backend developers and DevOps engineers tasked with scaling e-commerce platforms across multiple server nodes (e.g., Kubernetes pods), where concurrent webhook processing could result in severe data corruption without distributed locking.
 
-### Redis come Single Source of Truth Veloce
-Viene usato Redis perché è memory-based e atomico. Le collisioni (es. due pod Kubernetes che processano lo stesso Webhook contemporaneamente) vengono bloccate nativamente grazie al check atomico, prevenendo di accreditare i soldi due volte all'utente.
+## 4. Architecture (How does it work?)
+- **Atomic Check-and-Set**: When a `PaymentSuccessEvent` webhook arrives, the service queries Redis. If the transaction ID is already marked as `COMPLETED`, the request is immediately discarded. This neutralizes duplicate webhooks instantly.
+- **Out of Order Resolution**: If Stripe delivers an `invoice.paid` event before a `charge.succeeded` event due to internal network latency, the State Machine queues or recognizes the missing transition. It strictly rejects invalid state jumps (e.g., transitioning from `FAILED` directly to `COMPLETED`).
+- **Redis as a Single Source of Truth**: Because Redis operations are single-threaded and memory-based, collisions between two Kubernetes pods processing the exact same webhook simultaneously are resolved natively at the cache level before touching the SQL database.
+
+## 5. Installation / Setup
+This module requires the `ferrox-py-commerce` package, a running Redis server, and the python `redis` client.
+
+```bash
+pip install redis
+```
+
+## 6. Quickstart (Usage)
+```python
+from ferrox_py_commerce.services.transaction_state import TransactionStateService
+
+# Usually injected by the IoC container
+state_service = TransactionStateService(redis_client)
+
+async def handle_payment_success(transaction_id: str):
+    # This method attempts to transition the state atomically in Redis.
+    # If another pod already did it, it raises an IdempotencyError or returns False.
+    success = await state_service.transition_to(transaction_id, new_state="COMPLETED")
+    
+    if success:
+        print("Payment applied to user account.")
+    else:
+        print("Payment already processed. Ignoring duplicate webhook.")
+```
+
+## 7. Ecosystem Integration
+The Transaction State Machine relies fundamentally on the **Security Component** of the core `ferrox-py` framework, utilizing its `RedisLock` (Redlock algorithm) implementation. It also heavily interacts with the **Data Component** to eventually sync the finalized, deduplicated transaction state back to the persistent SQL database.
