@@ -1,10 +1,11 @@
+from typing import cast, Any
 import stripe
 from ferrox_py.core.provider import injectable
 from ferrox_py.integrations.payments import PaymentGateway, CheckoutRequest
 from ferrox_py.core.errors import FerroxError
 
 @injectable()
-class StripeGateway(PaymentGateway):
+class StripeGateway(PaymentGateway):  # type: ignore
     def __init__(self, api_key: str = "", webhook_secret: str = ""):
         stripe.api_key = api_key
         self.webhook_secret = webhook_secret
@@ -20,14 +21,14 @@ class StripeGateway(PaymentGateway):
         } for item in request.items]
 
         try:
-            session = stripe.checkout.Session.create(
+            session = stripe.checkout.Session.create(  # type: ignore
                 payment_method_types=["card"],
-                line_items=line_items,
+                line_items=cast(Any, line_items),
                 mode="payment",
                 success_url=request.success_url,
                 cancel_url=request.cancel_url,
             )
-            return session.url
+            return str(session.url)
         except Exception as e:
             raise FerroxError(f"Stripe Checkout Error: {str(e)}", 500)
 
@@ -37,7 +38,7 @@ class StripeGateway(PaymentGateway):
         """
         try:
             event = stripe.Webhook.construct_event(payload, sig_header, self.webhook_secret)
-            return event
+            return cast(stripe.Event, event)
         except ValueError:
             raise FerroxError("Invalid payload", 400)
         except stripe.error.SignatureVerificationError:

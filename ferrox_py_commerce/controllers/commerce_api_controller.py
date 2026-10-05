@@ -1,9 +1,9 @@
 from fastapi import Request
 from pydantic import BaseModel
-from typing import List
+from typing import List, Any
 from ferrox_py.core.controllers import BaseController
 from ferrox_py.core.container import Container
-from ferrox_py.integrations.payments import CheckoutRequest, LineItem
+from ferrox_py.integrations.payments import CheckoutRequest, PaymentItem
 from ferrox_py.databases.redis import RedisCacheService
 from ..gateways.stripe_gateway import StripeGateway
 from ..services.transaction_state import TransactionStateService
@@ -20,7 +20,7 @@ class CheckoutPayload(BaseModel):
     success_url: str = "http://localhost:3000/success"
     cancel_url: str = "http://localhost:3000/cancel"
 
-class CommerceApiController(BaseController):
+class CommerceApiController(BaseController):  # type: ignore
     """
     Frontend-facing API for starting payments and managing subscriptions.
     """
@@ -31,15 +31,15 @@ class CommerceApiController(BaseController):
         redis = container.resolve("RedisCacheService", RedisCacheService())
         self.state_service = TransactionStateService(redis)
 
-        @self.router.post("/checkout")
-        async def create_checkout(payload: CheckoutPayload):
+        @self.router.post("/checkout")  # type: ignore
+        async def create_checkout(payload: CheckoutPayload) -> Any:
             """Creates a checkout session and returns the redirect URL to the frontend."""
             
             # Map frontend payload to internal CheckoutRequest
             req = CheckoutRequest(
                 amount_cents=sum(i.amount_cents * i.quantity for i in payload.items),
                 currency=payload.currency,
-                items=[LineItem(name=i.name, amount_cents=i.amount_cents, quantity=i.quantity) for i in payload.items],
+                items=[PaymentItem(name=i.name, amount_cents=i.amount_cents, quantity=i.quantity) for i in payload.items],
                 success_url=payload.success_url,
                 cancel_url=payload.cancel_url,
             )
@@ -55,7 +55,7 @@ class CommerceApiController(BaseController):
             else:
                 return self.bad_request("Unsupported provider")
 
-        @self.router.get("/invoices")
-        async def list_invoices(request: Request):
+        @self.router.get("/invoices")  # type: ignore
+        async def list_invoices(request: Request) -> Any:
             """Returns invoice history (Mock implementation)."""
             return self.ok({"invoices": []}, "Invoices retrieved")

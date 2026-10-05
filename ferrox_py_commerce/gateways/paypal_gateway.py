@@ -1,8 +1,9 @@
+from typing import Dict, Any
 from ferrox_py.core.provider import injectable
 from ferrox_py.integrations.payments import PaymentGateway, CheckoutRequest
 
 @injectable()
-class PayPalGateway(PaymentGateway):
+class PayPalGateway(PaymentGateway):  # type: ignore
     def __init__(self, client_id: str = "", client_secret: str = ""):
         self.client_id = client_id
         self.client_secret = client_secret
@@ -12,7 +13,7 @@ class PayPalGateway(PaymentGateway):
         print(f"PayPal: Creating order for {sum(i.amount_cents for i in request.items)} cents")
         return "https://www.sandbox.paypal.com/checkoutnow?token=mock_token_123"
 
-    def verify_webhook_signature(self, headers: dict, body: dict) -> bool:
+    def verify_webhook_signature(self, headers: Dict[str, Any], body: Dict[str, Any]) -> bool:
         """
         PayPal requires a complex certificate/signature verification.
         In production, this calls PayPal's /v1/notifications/verify-webhook-signature API.

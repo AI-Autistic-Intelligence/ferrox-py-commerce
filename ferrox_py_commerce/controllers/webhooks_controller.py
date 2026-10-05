@@ -1,3 +1,4 @@
+from typing import Any
 from fastapi import Request
 from ferrox_py.core.controllers import BaseController
 from ferrox_py.core.container import Container
@@ -8,7 +9,7 @@ from ..gateways.paypal_gateway import PayPalGateway
 from ..models.events import PaymentSuccessEvent, InvoicePaidEvent, InvoiceFailedEvent
 from ..services.transaction_state import TransactionStateService
 
-class CommerceWebhookController(BaseController):
+class CommerceWebhookController(BaseController):  # type: ignore
     """
     The Webhook Standardizer. 
     Receives raw webhooks from Stripe and PayPal, mathematically verifies the cryptographic 
@@ -25,8 +26,8 @@ class CommerceWebhookController(BaseController):
         redis = container.resolve("RedisCacheService", RedisCacheService())
         self.state_service = TransactionStateService(redis)
 
-        @self.router.post("/stripe")
-        async def stripe_webhook(request: Request):
+        @self.router.post("/stripe")  # type: ignore
+        async def stripe_webhook(request: Request) -> Any:
             payload = await request.body()
             sig_header = request.headers.get("stripe-signature")
             
@@ -58,7 +59,7 @@ class CommerceWebhookController(BaseController):
                     
             elif event.type == "invoice.paid":
                 invoice = event.data.object
-                std_event = InvoicePaidEvent(
+                event_paid = InvoicePaidEvent(
                     provider="stripe",
                     invoice_id=invoice.id,
                     subscription_id=invoice.subscription,
@@ -66,22 +67,22 @@ class CommerceWebhookController(BaseController):
                     amount_cents=invoice.amount_paid,
                     currency=invoice.currency
                 )
-                print(f"[EVENT BUS] Emitting: {std_event.model_dump_json()}")
+                print(f"[EVENT BUS] Emitting: {event_paid.model_dump_json()}")
                 
             elif event.type == "invoice.payment_failed":
                 invoice = event.data.object
-                std_event = InvoiceFailedEvent(
+                event_failed = InvoiceFailedEvent(
                     provider="stripe",
                     invoice_id=invoice.id,
                     subscription_id=invoice.subscription,
                     customer_id=invoice.customer
                 )
-                print(f"[EVENT BUS] Emitting: {std_event.model_dump_json()}")
+                print(f"[EVENT BUS] Emitting: {event_failed.model_dump_json()}")
                 
             return self.ok(message="Webhook processed successfully")
 
-        @self.router.post("/paypal")
-        async def paypal_webhook(request: Request):
+        @self.router.post("/paypal")  # type: ignore
+        async def paypal_webhook(request: Request) -> Any:
             headers = dict(request.headers)
             body = await request.json()
             
